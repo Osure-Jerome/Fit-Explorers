@@ -24,17 +24,20 @@ export default function JoinUs() {
             <br />
             <span style={{ color: "var(--color-orange)" }}>Explorers</span>
           </h2>
-          <p className="text-base leading-relaxed mb-2 text-white/80">
-            Getting started is simple. Message the admin on WhatsApp or email
-            and we'll get you added to the group. First session is on us — just
-            show up.
+                    <p className="text-base leading-relaxed mb-2 text-white/80">
+            Getting started is simple. Send one short message and it lands straight in
+            the admin's inbox and on WhatsApp — we'll get you added to the group.
+            First session is on us — just show up.
           </p>
           <p className="text-sm font-medium text-white/60">
             No fees to join, no experience needed — just say hello.
           </p>
 
           {/* Quick direct channels */}
-          <div className="mt-8 flex flex-col gap-4">
+          <p className="mt-8 mb-3 text-xs font-semibold uppercase tracking-widest text-white/50">
+            Prefer to reach out directly?
+          </p>
+          <div className="flex flex-col gap-4">
             <a
               href={`https://wa.me/${CONTACT.whatsappNumber}?text=${encodeURIComponent(
                 "Hi Fit Explorers! I'd love to join the crew. When is the next session?",
