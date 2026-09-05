@@ -11,7 +11,7 @@ you here.
 - **React 19** + **TypeScript 5.7+** (strict mode)
 - **Vite 8** — dev server, build tooling, `@` alias for `src/`
 - **Tailwind CSS v4** (via the `@tailwindcss/vite` plugin, no config file needed)
-- **oxfmt** — code formatter (`pnpm format`)
+- **oxfmt** — code formatter (`npm format`)
 
 ## Features
 
@@ -60,22 +60,22 @@ All copy, content data, and the admin contact details live in **one file** —
 
 ```bash
 # 1. Install dependencies
-pnpm install
+npm install
 
 # 2. Start the dev server (defaults to http://localhost:8443)
-pnpm dev
+npm dev
 
 # 3. Production build (outputs to dist/)
-pnpm build
+npm build
 
 # 4. Preview the production build locally
-pnpm preview
+npm preview
 
 # 5. Format the code (oxfmt)
-pnpm format
+npm format
 ```
 
-> If the default port (8443) is busy, override it with `PORT=xxxx pnpm dev`.
+> If the default port (8443) is busy, override it with `PORT=xxxx npm dev`.
 
 ### Useful checks
 
@@ -84,7 +84,7 @@ pnpm format
 npx tsc --noEmit
 
 # Build + verify it compiles for production
-pnpm build
+npm build
 ```
 
 ## Updating Contact Details
@@ -119,20 +119,20 @@ accounts are required.
 
 ## Deployment
 
-The build is fully static (`pnpm build` → `dist/`). It can be hosted anywhere that serves
+The build is fully static (`npm build` → `dist/`). It can be hosted anywhere that serves
 static files.
 
 ### Netlify
 1. Push this folder to a Git repository.
 2. On Netlify: **New site from Git** → pick the repo.
-3. Build command: `pnpm build` — Publish directory: `dist`
+3. Build command: `npm build` — Publish directory: `dist`
 
 ### Vercel
 1. Import the project.
 2. Framework preset: **Vite** (build `pnpm build`, output `dist`) — Vercel auto-detects it.
 
 ### GitHub Pages / generic hosting
-1. Run `pnpm build`.
+1. Run `npm build`.
 2. Upload the `dist/` folder to your host / GH Pages branch.
 3. If deploying under a sub-path (e.g. `https://user.github.io/repo/`), set the public
    base first so asset URLs are correct:
