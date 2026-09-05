@@ -14,8 +14,15 @@ A Vite development server is **already running** on `$PORT` (default 8443). You 
 This is the canonical project structure. Start with task-relevant files below. Only follow imports or inspect other files when required, when a documented path is missing, or when the repository contradicts this guide.
 
 - `src/main.tsx` - React entrypoint; imports `src/index.css` and mounts `src/App.tsx` into the `#root` element
-- `src/App.tsx` - Primary application component and the usual starting point for UI work
+- `src/App.tsx` - Composes the page layout from layout components and page sections; the usual starting point for UI work
 - `src/index.css` - Global CSS entrypoint and Tailwind CSS v4 import
+- `src/config/site.ts` - Single source of truth for site content (nav links, activities, schedule, stats, images) and admin contact details (`osurejerhome@gmail.com`, `+254 797 492 910`)
+- `src/components/layout/` - Persistent chrome: `Header` (nav + mobile menu) and `Footer`
+- `src/components/sections/` - One component per landing-page section (`Hero`, `Stats`, `Activities`, `ForEveryone`, `Schedule`, `JoinUs`)
+- `src/components/join/` - `JoinMessageForm`, the join/contact form that composes messages for the admin
+- `src/lib/` - Pure helpers: `scroll.ts` (smooth scrolling) and `contact.ts` (mailto / WhatsApp deep-link builders)
+- `src/types/` - Shared TypeScript domain types (`Activity`, `Stat`, `ScheduleRow`, `JoinMessage`, `ContactChannel`)
+- `src/assets/images/` - Local image assets used by the site
 - `index.html` - Vite HTML shell containing the `#root` element and loading `src/main.tsx`
 - `package.json` - Project dependencies and the Vite build, development, preview, and formatting scripts
 - `vite.config.ts` - Vite configuration with React, Tailwind CSS v4, and Figma Make plugins plus the `@` alias for `src`
