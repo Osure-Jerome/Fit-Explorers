@@ -1,0 +1,10 @@
+{
+  "description": "Connect with a fitness community offering running, hiking, events, and challenges for all ages with easy contact options to join and stay active.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
