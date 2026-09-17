@@ -10,7 +10,8 @@
  */
 
 import http from "node:http";
-import { handleNotifyRequest } from "./app.mjs";
+import { ADMIN_EMAIL, ADMIN_WHATSAPP, handleNotifyRequest } from "./app.mjs";
+import { describeProviders } from "./notify.mjs";
 
 const PORT = Number(process.env.NOTIFY_PORT || 8787);
 
@@ -23,7 +24,15 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
+  const providers = describeProviders();
   console.log(
     `[notify] Fit Explorers notification API → http://localhost:${PORT}`,
   );
+  console.log(`[notify] Admin email → ${ADMIN_EMAIL} (${providers.email})`);
+  console.log(`[notify] Admin WhatsApp → ${ADMIN_WHATSAPP} (${providers.whatsapp})`);
+  if (providers.email === "dry-run" || providers.whatsapp === "dry-run") {
+    console.warn(
+      "[notify] One or more channels are in dry-run mode. Add credentials to .env (see env.example).",
+    );
+  }
 });

@@ -11,13 +11,18 @@
  *     - SMTP   (Gmail/Outlook/etc.)  SMTP_HOST, SMTP_PORT, SMTP_SECURE,
  *                                     SMTP_USER, SMTP_PASS, MAIL_FROM
  *     - Resend (HTTP API)             RESEND_API_KEY, MAIL_FROM
+ *     - Twilio SendGrid (HTTP API)    SENDGRID_API_KEY (or TWILIO_EMAIL_API_KEY),
+ *                                     MAIL_FROM
  *     - otherwise: DRY-RUN (logged only)
  *
  *   WHATSAPP (priority order)
- *     - Twilio WhatsApp Cloud API     TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN,
+ *     - Twilio WhatsApp API           TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN,
  *                                     TWILIO_WHATSAPP_FROM
  *     - Generic webhook               WHATSAPP_WEBHOOK_URL
  *     - otherwise: DRY-RUN (logged only)
+ *
+ * Use `node server/check.mjs` to see which providers are active, and
+ * `node server/check.mjs --send` to send a live test to the admin.
  *
  * See `.env.example` at the project root.
  */
@@ -48,6 +53,41 @@ export function makeContactSubject(name) {
   return name
     ? `New Fit Explorers enquiry — ${name}`
     : "New Fit Explorers enquiry";
+}
+
+/** Parses `"Name <email@example.com>"` (or a bare email) into SendGrid's `{ name, email }`. */
+export function parseFromAddress(value) {
+  const match = /^\s*(.*?)\s*<([^>]+)>\s*$/.exec(value || "");
+  if (match) return { name: match[1] || undefined, email: match[2] };
+  return { email: (value || "").trim() };
+}
+
+/** Normalises a phone number to WhatsApp's `whatsapp:+<digits>` format. */
+export function toWhatsAppAddress(value) {
+  const digits = String(value || "")
+    .replace(/^whatsapp:/, "")
+    .replace(/^\+/, "");
+  return `whatsapp:+${digits}`;
+}
+
+/** Reports which provider handles each channel ("dry-run" when none is set). */
+export function describeProviders() {
+  const email = process.env.SMTP_HOST
+    ? "smtp"
+    : process.env.RESEND_API_KEY
+      ? "resend"
+      : process.env.SENDGRID_API_KEY || process.env.TWILIO_EMAIL_API_KEY
+        ? "sendgrid"
+        : "dry-run";
+
+  const whatsapp =
+    process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN
+      ? "twilio"
+      : process.env.WHATSAPP_WEBHOOK_URL
+        ? "webhook"
+        : "dry-run";
+
+  return { email, whatsapp };
 }
 
 /** Sends an email to the admin. Resolves to a delivery report. */
@@ -101,7 +141,38 @@ export async function sendEmail({ to, subject, text }) {
     }
   }
 
-  // 3) No provider configured — dry run so local flows stay testable.
+  // 3) Twilio SendGrid email API (Twilio's email product)
+  const sendgridKey =
+    process.env.SENDGRID_API_KEY || process.env.TWILIO_EMAIL_API_KEY;
+  if (sendgridKey) {
+    try {
+      const from = parseFromAddress(process.env.MAIL_FROM || to);
+      const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${sendgridKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          personalizations: [{ to: [{ email: to }] }],
+          from,
+          subject,
+          content: [{ type: "text/plain", value: text }],
+        }),
+      });
+      if (!response.ok) {
+        const detail = await response.text().catch(() => "");
+        throw new Error(
+          `SendGrid responded ${response.status}${detail ? `: ${detail.slice(0, 200)}` : ""}`,
+        );
+      }
+      return { status: "sent", provider: "sendgrid" };
+    } catch (error) {
+      return { status: "failed", provider: "sendgrid", error: error.message };
+    }
+  }
+
+  // 4) No provider configured — dry run so local flows stay testable.
   console.log(
     `[email:dry-run] Would send email to ${to}\nSubject: ${subject}\n\n${text}`,
   );
@@ -116,11 +187,13 @@ export async function sendWhatsApp({ to, text }) {
   // 1) Twilio WhatsApp Cloud API
   if (accountSid && authToken) {
     try {
-      const from = process.env.TWILIO_WHATSAPP_FROM;
-      if (!from) throw new Error("TWILIO_WHATSAPP_FROM is not configured");
+      const rawFrom = process.env.TWILIO_WHATSAPP_FROM;
+      if (!rawFrom) {
+        throw new Error("TWILIO_WHATSAPP_FROM is not configured");
+      }
       const body = new URLSearchParams({
-        To: `whatsapp:+${to}`,
-        From: from,
+        To: toWhatsAppAddress(to),
+        From: toWhatsAppAddress(rawFrom),
         Body: text,
       });
       const response = await fetch(
@@ -136,10 +209,15 @@ export async function sendWhatsApp({ to, text }) {
           body: body.toString(),
         },
       );
+      const data = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(`Twilio responded with status ${response.status}`);
+        throw new Error(
+          data?.message
+            ? `Twilio: ${data.message}`
+            : `Twilio responded with status ${response.status}`,
+        );
       }
-      return { status: "sent", provider: "twilio" };
+      return { status: "sent", provider: "twilio", sid: data?.sid };
     } catch (error) {
       return { status: "failed", provider: "twilio", error: error.message };
     }
@@ -165,7 +243,7 @@ export async function sendWhatsApp({ to, text }) {
 
   // 3) No provider configured — dry run so local flows stay testable.
   console.log(
-    `[whatsapp:dry-run] Would send WhatsApp to whatsapp:+${to}\n\n${text}`,
+    `[whatsapp:dry-run] Would send WhatsApp to ${toWhatsAppAddress(to)}\n\n${text}`,
   );
   return { status: "dry-run", provider: "none", to };
 }

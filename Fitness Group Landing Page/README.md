@@ -12,7 +12,8 @@ you here.
 - **Vite 8** — dev server, build tooling, `@` alias for `src/`
 - **Tailwind CSS v4** (via the `@tailwindcss/vite` plugin, no config file needed)
 - **oxfmt** — code formatter (`npm run format`)
-- **Node.js notification API** — server-side email + WhatsApp delivery (`server/`)
+- **Node.js notification API** — server-side email + WhatsApp delivery (`server/`), Twilio-ready (WhatsApp API + SendGrid email)
+- **nodemailer** — SMTP email transport (used only when `SMTP_HOST` is set)
 
 ## Features
 
@@ -37,8 +38,8 @@ Visitor fills the form
         ▼
 Notification API (server/)          (dev: mounted inside Vite · prod: standalone Node server)
         │
-        ├── sendEmail()      → SMTP (nodemailer) or Resend  →  admin email
-        └── sendWhatsApp()   → Twilio or webhook            →  admin WhatsApp
+        ├── sendEmail()      → SMTP / Resend / SendGrid     →  admin email
+        └── sendWhatsApp()   → Twilio / webhook              →  admin WhatsApp
 ```
 
 - The frontend only talks to `/api/contact` via `fetch` (see `src/lib/notify.ts`).
@@ -61,8 +62,10 @@ Notification API (server/)          (dev: mounted inside Vite · prod: standalon
 ├── AGENTS.md                   # Project guide for agents/contributors
 ├── server/                     # Notification API (Node, no framework)
 │   ├── app.mjs                 # Shared HTTP handler (/api/health, /api/contact)
-│   ├── notify.mjs              # Email (SMTP/Resend) + WhatsApp (Twilio/webhook) senders
-│   └── index.mjs               # Standalone server entry (pnpm run api)
+│   ├── notify.mjs              # Email (SMTP/Resend/SendGrid) + WhatsApp (Twilio/webhook) senders
+│   ├── env.mjs                 # Loads .env for both dev-mounted and standalone modes
+│   ├── check.mjs               # Credential check / live test (npm run notify:check)
+│   └── index.mjs               # Standalone server entry (npm run api)
 └── src/
     ├── main.tsx                # React entrypoint
     ├── index.css               # Tailwind import + design tokens/fonts
@@ -109,7 +112,10 @@ npm run preview
 # 5. Type-check the project (no output = clean)
 npm run typecheck
 
-# 6. Format the code (oxfmt)
+# 6. Verify notification credentials (after creating .env)
+npm run notify:check
+
+# 7. Format the code (oxfmt)
 npm run format
 ```
 
@@ -117,40 +123,70 @@ npm run format
 
 ## Configuring Real Email + WhatsApp Delivery
 
-Auto-notification uses server-side providers. No provider is required in development
-(dry-run), but to actually reach the admin, copy the template and fill in one email and
-one WhatsApp option:
+Notifications are sent by the **server**, so provider credentials never ship to the
+browser. Copy the template and fill in **one email** and **one WhatsApp** option —
+Twilio can cover both. The server loads `.env` automatically in both dev and standalone
+modes (see `server/env.mjs`).
 
 ```bash
 cp env.example .env
 ```
 
-### Email (pick one)
+### Recommended: Twilio (WhatsApp + Email)
 
-| Provider | Env vars | Notes |
-| --- | --- | --- |
-| **SMTP** (recommended) | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` | Works with Gmail app passwords. Enable 2FA on the account → create an App Password. |
-| **Resend** | `RESEND_API_KEY`, `MAIL_FROM` | Free tier at resend.com. |
+Twilio provides WhatsApp messaging **and** SendGrid email, so one account powers both channels.
 
-### WhatsApp (pick one)
+**WhatsApp**
+1. In the [Twilio Console](https://console.twilio.com) copy your **Account SID** and **Auth Token**.
+2. Get a WhatsApp-enabled sender: the **WhatsApp Sandbox** for testing, or an approved number for production.
+3. Set:
+   ```dotenv
+   TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxx
+   TWILIO_AUTH_TOKEN=your-auth-token
+   TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
+   ```
+   > Trial accounts: the admin's WhatsApp number must join the Twilio sandbox first.
 
-| Provider | Env vars | Notes |
-| --- | --- | --- |
-| **Twilio WhatsApp API** | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM` | `TWILIO_WHATSAPP_FROM` is a Twilio-approved WhatsApp number like `whatsapp:+14155238886`. |
-| **Webhook** | `WHATSAPP_WEBHOOK_URL` | For Green API / 360dialog / custom gateways. Server POSTs `{ to: "whatsapp:+<number>", text }`. |
+**Email (Twilio SendGrid)**
+1. Create a **SendGrid API key** with _Mail Send_ permission.
+2. Verify a sender address/domain under **Sender Authentication**.
+3. Set:
+   ```dotenv
+   SENDGRID_API_KEY=SG.xxxxxxxxxxxxxxxx
+   MAIL_FROM="Fit Explorers <your-verified-sender@example.com>"
+   ```
+
+### Alternatives
+
+| Channel | Provider | Env vars | Notes |
+| --- | --- | --- | --- |
+| Email | **SMTP** (priority) | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` | Gmail app passwords supported (enable 2FA → create an App Password). |
+| Email | **Resend** | `RESEND_API_KEY`, `MAIL_FROM` | Free tier at resend.com. |
+| Email | **Twilio SendGrid** | `SENDGRID_API_KEY` (or `TWILIO_EMAIL_API_KEY`), `MAIL_FROM` | Included with Twilio. |
+| WhatsApp | **Twilio** (priority) | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM` | `whatsapp:+<number>`. |
+| WhatsApp | **Webhook** | `WHATSAPP_WEBHOOK_URL` | Green API / 360dialog / custom. Server POSTs `{ to, text }`. |
+
+Priority: **SMTP → Resend → SendGrid** for email, **Twilio → webhook** for WhatsApp.
+Channels without credentials fall back to dry-run (message printed to the server log).
+
+### Verify your setup
+
+```bash
+npm run notify:check     # shows which providers are detected (sends nothing)
+npm run notify:test      # sends a live test to the admin's email + WhatsApp
+```
+
+A successful live test prints `sent (twilio)` / `sent (sendgrid)`. Misconfiguration
+surfaces the provider's own message (e.g. an unverified sender or an unjoined sandbox).
 
 ### Who receives the notifications
 
-The defaults match `src/config/site.ts` but can be overridden in `.env`:
+Defaults match `src/config/site.ts` and can be overridden in `.env`:
 
 ```dotenv
 ADMIN_EMAIL=osurejerhome@gmail.com
 ADMIN_WHATSAPP=254797492910
 ```
-
-When keys are present, submitting the form sends a real email and a real WhatsApp
-message to the admin. The server logs every delivery attempt (`sent` / `failed`) with its
-provider.
 
 ## Running the API Standalone
 
@@ -160,9 +196,9 @@ In production (or to run the API apart from Vite):
 npm run api          # starts server/index.mjs on :8787 (or NOTIFY_PORT)
 ```
 
-`server/index.mjs` loads `.env` automatically (Node's `--env-file-if-missing`) and serves:
+`server/index.mjs` loads `.env` automatically (via `server/env.mjs`) and serves:
 
-- `GET  /api/health` — liveness check
+- `GET  /api/health` — liveness + detected providers (`email`, `whatsapp`)
 - `POST /api/contact` — accepts `{ name, phone?, interest?, message }`, delivers to admin
 
 ## Updating Contact Details
@@ -191,6 +227,10 @@ Hosts that run a Node process (Render, Railway, Fly.io, a VPS) can serve the bui
 npm run build        # produce dist/
 npm run api          # serve the API; point your reverse proxy /api → the API port
 ```
+
+> `.env` is **git-ignored** — set `ADMIN_EMAIL`, `ADMIN_WHATSAPP`, and your provider
+> credentials as environment variables in the host's dashboard (or an un-tracked `.env`
+> on the server). Run `npm run notify:check` on the host to confirm they were picked up.
 
 ### Option B — Static host (Netlify / Vercel / GitHub Pages) + separate API
 

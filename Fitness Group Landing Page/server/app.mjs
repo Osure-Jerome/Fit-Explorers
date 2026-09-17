@@ -6,8 +6,11 @@
  *   2. Standalone Node server (`node server/index.mjs`) for production.
  */
 
+// Load `.env` before reading any config (also covers the Vite-mounted dev API).
+import "./env.mjs";
 import {
   composeContactMessage,
+  describeProviders,
   makeContactSubject,
   sendEmail,
   sendWhatsApp,
@@ -120,6 +123,8 @@ export async function handleNotifyRequest(req, res) {
       ok: true,
       service: "fitexplorers-notify",
       adminEmail: ADMIN_EMAIL,
+      adminWhatsapp: ADMIN_WHATSAPP,
+      providers: describeProviders(),
     });
     return true;
   }

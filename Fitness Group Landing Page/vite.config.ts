@@ -4,7 +4,6 @@ import tailwindcss from '@tailwindcss/vite'
 import path from 'node:path'
 
 import siteConfiguration from './.figma/make/site.json'
-import { handleNotifyRequest } from './server/app.mjs'
 
 // Vite config — https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -370,10 +369,15 @@ function figmaNotifyApi(): Plugin {
     name: 'fitexplorers-notify-api',
     apply: 'serve',
     configureServer(server) {
+      // Lazy import keeps server-only deps (nodemailer) + .env loading out of
+      // the production build; it loads as soon as the dev server starts.
+      const handlerPromise = import('./server/app.mjs')
+
       server.middlewares.use(async (req, res, next) => {
         const url = (req.url || '').split('?')[0]
         if (!url.startsWith('/api/')) return next()
 
+        const { handleNotifyRequest } = await handlerPromise
         const handled = await handleNotifyRequest(req, res)
         if (!handled) {
           res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' })
