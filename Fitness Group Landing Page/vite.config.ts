@@ -23,6 +23,7 @@ export default defineConfig(({ mode }) => {
       figmaErrorOverlayReplay(),
       figmaReactRefreshBoundaryFallback(),
       figmaMakeKitPlugin({ storiesGlob: '/src/**/*.stories.{ts,tsx,js,jsx}' }),
+      figmaNotifyApi(),
     ],
     resolve: {
       alias: {
@@ -349,6 +350,38 @@ function figmaMakeKitPlugin(options: { storiesGlob: string | string[] }): Plugin
           res.end(await server.transformIndexHtml(url, HTML_BOOTSTRAP))
         } catch (err) {
           next(err as Error)
+        }
+      })
+    },
+  }
+}
+
+/**
+ * Mounts the Fit Explorers notification API (server/app.mjs) directly into
+ * the Vite dev server so the contact form can POST to `/api/contact` on the
+ * same origin during development — no separate process or proxy needed.
+ *
+ * Dev-only. For production, run the standalone Node API (`pnpm api`) or
+ * deploy server/ to your host / serverless platform.
+ */
+function figmaNotifyApi(): Plugin {
+  return {
+    name: 'fitexplorers-notify-api',
+    apply: 'serve',
+    configureServer(server) {
+      // Lazy import keeps server-only deps (nodemailer) + .env loading out of
+      // the production build; it loads as soon as the dev server starts.
+      const handlerPromise = import('./server/app.mjs')
+
+      server.middlewares.use(async (req, res, next) => {
+        const url = (req.url || '').split('?')[0]
+        if (!url.startsWith('/api/')) return next()
+
+        const { handleNotifyRequest } = await handlerPromise
+        const handled = await handleNotifyRequest(req, res)
+        if (!handled) {
+          res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' })
+          res.end(JSON.stringify({ ok: false, error: 'Not found' }))
         }
       })
     },
